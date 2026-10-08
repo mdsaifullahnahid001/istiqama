@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d1a">
+<meta name="application-name" content="Istiqama">
+<meta name="apple-mobile-web-app-title" content="Istiqama">
+<meta name="description" content="Study with Focus. Live with Faith.">
+<title>Istiqama</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<style>
+/* Istiqama additions: layout only. Colours, fonts and theme come from style.css. */
+.quote-card{display:grid;gap:6px}
+.quote-card p{margin:0}
+.quote-card .q-en{font-weight:600;line-height:1.45}
+.quote-card .q-bn{line-height:1.7}
+.quote-card .q-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rank-card p{margin:6px 0 0}
+.rank-ladder{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.rank-ladder li{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:10px;opacity:.6}
+.rank-ladder li[aria-current="true"]{opacity:1;font-weight:700;border-color:currentColor}
+.about-list{display:grid;gap:8px}
+.about-list a{color:inherit;text-decoration:underline;word-break:break-all}
+</style>
+<!-- Firebase App (Required) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<!-- Firebase Auth -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<!-- Firebase Firestore -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- ================= PIN LOCK ================= -->
+<section id="lock-screen" class="overlay hidden" aria-label="PIN lock">
+  <div class="glass auth-card">
+    <h2>Enter PIN</h2>
+    <input id="lock-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="PIN">
+    <p id="lock-error" class="msg error"></p>
+    <button id="lock-submit" class="btn primary block" type="button">Unlock</button>
+  </div>
+</section>
+
+<!-- ================= AUTH UI (frontend-ready placeholder) ================= -->
+<section id="auth-screen" class="overlay hidden" aria-label="Welcome">
+  <div class="auth-wrap">
+    <header class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <h1>Istiqama</h1>
+      <p class="tagline">Study with Focus. Live with Faith.</p>
+    </header>
+
+    <div class="glass auth-card" data-auth-panel="welcome">
+      <button id="link-show-login" class="btn primary block" type="button" data-auth-show="login">Log in</button>
+      <button id="link-show-register" class="btn ghost block" type="button" data-auth-show="register">Create account</button>
+      <button id="btn-guest" class="btn quiet block" type="button">Continue without account</button>
+      <p class="hint">Your data stays on this device unless you sign in.</p>
+    </div>
+
+    <form id="login-form" class="glass auth-card hidden" data-auth-panel="login" novalidate>
+      <h2>Log in</h2>
+      <label class="field"><span>Email</span><input id="login-email" type="email" autocomplete="email" required></label>
+      <label class="field"><span>Password</span><input id="login-password" type="password" autocomplete="current-password" required></label>
+      <p class="msg error" id="login-msg"></p>
+      <button class="btn primary block" type="submit">Log in</button>
+      <button id="link-show-forgot" class="btn quiet block" type="button" data-auth-show="forgot">Forgot password?</button>
+      <button class="btn quiet block" type="button" data-auth-show="welcome">Back</button>
+    </form>
+
+    <form id="register-form" class="glass auth-card hidden" data-auth-panel="register" novalidate>
+      <h2>Create account</h2>
+      <label class="field"><span>Name</span><input id="reg-name" type="text" autocomplete="name" required></label>
+      <label class="field"><span>Email</span><input id="reg-email" type="email" autocomplete="email" required></label>
+      <label class="field"><span>Password</span><input id="reg-password" type="password" autocomplete="new-password" minlength="6" required></label>
+      <label class="field"><span>Confirm password</span><input id="reg-confirm" type="password" autocomplete="new-password" minlength="6" required></label>
+      <p class="msg error" id="register-msg"></p>
+      <button class="btn primary block" type="submit">Create account</button>
+      <button class="btn quiet block" type="button" data-auth-show="welcome">Back</button>
+    </form>
+
+    <form id="forgot-form" class="glass auth-card hidden" data-auth-panel="forgot" novalidate>
+      <h2>Reset password</h2>
+      <label class="field"><span>Email</span><input id="forgot-email" type="email" autocomplete="email" required></label>
+      <p class="msg" id="forgot-msg"></p>
+      <button class="btn primary block" type="submit">Send reset link</button>
+      <button id="link-back-login" class="btn quiet block" type="button" data-auth-show="login">Back to log in</button>
+    </form>
+  </div>
+</section>
+
+<!-- ================= DAILY SETUP ================= -->
+<section id="goal-screen" class="overlay hidden" aria-label="Today's Study Goal">
+  <form id="goal-form" class="glass auth-card" novalidate>
+    <h2>Today's Study Goal</h2>
+    <p class="hint" id="goal-date"></p>
+    <label class="field"><span>Study target (hours)</span>
+      <input id="goal-hours" type="number" inputmode="decimal" min="0.5" max="24" step="0.5" required>
+    </label>
+    <p class="msg error" id="goal-msg"></p>
+    <button class="btn primary block" type="submit">Start today</button>
+  </form>
+</section>
+
+<!-- ================= MAIN APP ================= -->
+<div id="app-screen" class="hidden">
+  <main id="views">
+
+    <!-- ---------- HOME ---------- -->
+    <section id="view-home" class="view active" data-view="home" aria-label="Home">
+      <div id="quote-card" class="glass quote-card" aria-label="Daily motivation">
+        <p id="quote-en" class="q-en"></p>
+        <p id="quote-bn" class="q-bn" lang="bn"></p>
+        <div class="q-foot">
+          <small id="quote-src" class="muted"></small>
+          <button id="quote-next" class="btn chip" type="button">New quote</button>
+        </div>
+      </div>
+
+      <header class="page-head">
+        <div>
+          <h1 id="home-greeting">Hello</h1>
+          <p id="home-date" class="muted"></p>
+        </div>
+        <button id="btn-edit-goal" class="btn chip" type="button">Edit goal</button>
+      </header>
+
+      <div class="glass hero-card">
+        <div id="score-ring" class="ring" role="img" aria-label="Daily score">
+          <div class="ring-inner"><strong id="score-value">0</strong><small>of 100</small></div>
+        </div>
+        <div class="hero-stats">
+          <div><span class="label">Study</span><strong id="home-study">0h / 0h</strong></div>
+          <div><span class="label">Study score</span><strong id="home-study-score">0 / 50</strong></div>
+          <div><span class="label">Habit score</span><strong id="home-habit-score">0 / 50</strong></div>
+        </div>
+      </div>
+
+      <div class="progress-row glass">
+        <div class="row-top"><span>Study progress</span><strong id="home-study-pct">0%</strong></div>
+        <div class="bar"><i id="home-study-bar"></i></div>
+        <div class="row-top"><span>Overall completion</span><strong id="home-overall-pct">0%</strong></div>
+        <div class="bar"><i id="home-overall-bar"></i></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="glass stat"><span class="label">Salah</span><strong id="home-salah">0 / 5</strong></div>
+        <div class="glass stat"><span class="label">Quran</span><strong id="home-quran">Not done</strong></div>
+        <div class="glass stat"><span class="label">Meditation</span><strong id="home-meditation">Not done</strong></div>
+        <div class="glass stat"><span class="label">Lies</span><strong id="home-lies">0</strong></div>
+        <div class="glass stat"><span class="label">Screen time</span><strong id="home-screen">0m / 60m</strong></div>
+        <div class="glass stat"><span class="label">Sleep</span><strong id="home-sleep">Not logged</strong></div>
+        <div class="glass stat"><span class="label">Study streak</span><strong id="home-streak">0 days</strong></div>
+        <div class="glass stat"><span class="label">Best score</span><strong id="home-best">0</strong></div>
+      </div>
+
+      <div class="glass tree-card">
+        <div id="tree" class="tree" data-stage="0" aria-hidden="true">
+          <div class="tree-crown"></div><div class="tree-trunk"></div><div class="tree-ground"></div>
+        </div>
+        <div>
+          <h3 id="tree-stage">Seed</h3>
+          <p id="tree-note" class="muted">Log a study day to plant your seed.</p>
+        </div>
+      </div>
+
+      <div id="rank-card" class="glass rank-card" aria-label="Streak rank">
+        <div class="row-top"><h3>Streak Rank</h3><span id="rank-badge" class="chip-static">Unranked</span></div>
+        <p id="rank-days" class="muted">0 days streak</p>
+        <p id="rank-next" class="hint"></p>
+        <ul id="rank-ladder" class="rank-ladder">
+          <li data-rank="beginner"><span>Beginner</span><span>1&ndash;3 days</span></li>
+          <li data-rank="regular"><span>Regular</span><span>4&ndash;7 days</span></li>
+          <li data-rank="consistent"><span>Consistent</span><span>8&ndash;14 days</span></li>
+          <li data-rank="pro"><span>Pro</span><span>15&ndash;29 days</span></li>
+          <li data-rank="master"><span>Master</span><span>30+ days</span></li>
+        </ul>
+      </div>
+
+      <div id="why-card" class="glass why-card hidden">
+        <h3>Why not 100%?</h3>
+        <ul id="why-list" class="plain-list"></ul>
+        <label class="field"><span>Why not? Write your own reason</span>
+          <textarea id="why-note" rows="3" maxlength="500"></textarea>
+        </label>
+        <button id="why-save" class="btn ghost" type="button">Save reason</button>
+      </div>
+    </section>
+
+    <!-- ---------- STUDY ---------- -->
+    <section id="view-study" class="view" data-view="study" aria-label="Study">
+      <header class="page-head"><h1>Study</h1><span id="study-today" class="chip-static">0h today</span></header>
+
+      <nav class="tabs" id="study-tabs" role="tablist">
+        <button class="tab active" type="button" data-tab="timer">Timer</button>
+        <button class="tab" type="button" data-tab="class">Class</button>
+        <button class="tab" type="button" data-tab="exam">Exam</button>
+        <button class="tab" type="button" data-tab="revision">Revision</button>
+        <button class="tab" type="button" data-tab="self">Self study</button>
+        <button class="tab" type="button" data-tab="practice">Practice</button>
+      </nav>
+
+      <!-- Timer -->
+      <div class="panel active" data-panel="timer">
+        <div class="glass timer-card">
+          <div id="timer-display" class="timer-display" aria-live="off">00:00:00</div>
+          <p id="timer-phase" class="muted center">Ready</p>
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input id="timer-subject" type="text" list="subject-list" maxlength="60" autocomplete="off"></label>
+            <label class="field"><span>Chapter</span><input id="timer-chapter" type="text" maxlength="80" autocomplete="off"></label>
+          </div>
+          <label class="field"><span>Mode</span>
+            <select id="timer-preset">
+              <option value="free">Free timer</option>
+              <option value="25/5">Pomodoro 25 / 5</option>
+              <option value="50/10">Pomodoro 50 / 10</option>
+              <option value="60/10">Pomodoro 60 / 10</option>
+            </select>
+          </label>
+          <div class="btn-row">
+            <button id="timer-start" class="btn primary" type="button">Start</button>
+            <button id="timer-pause" class="btn ghost hidden" type="button">Pause</button>
+            <button id="timer-resume" class="btn ghost hidden" type="button">Resume</button>
+            <button id="timer-finish" class="btn danger hidden" type="button">Finish</button>
+          </div>
+          <p id="timer-msg" class="msg"></p>
+        </div>
+        <h3 class="section-title">Today's sessions</h3>
+        <ul id="session-list" class="record-list"></ul>
+      </div>
+
+      <!-- Class -->
+      <div class="panel" data-panel="class">
+        <form id="class-form" class="glass form-card" novalidate>
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input name="subject" type="text" list="subject-list" maxlength="60" required></label>
+            <label class="field"><span>Chapter</span><input name="chapter" type="text" maxlength="80" required></label>
+            <label class="field"><span>Medium</span>
+              <select name="medium"><option>Online</option><option>Offline</option></select>
+            </label>
+            <label class="field"><span>Duration (Minutes)</span><input name="duration" type="number" inputmode="numeric" min="1" max="1440" step="1" required></label>
+          </div>
+          <label class="field"><span>Notes</span><textarea name="notes" rows="2" maxlength="500"></textarea></label>
+          <p class="msg error" data-msg></p>
+          <button class="btn primary block" type="submit">Save class</button>
+        </form>
+        <ul id="class-list" class="record-list"></ul>
+      </div>
+
+      <!-- Exam -->
+      <div class="panel" data-panel="exam">
+        <form id="exam-form" class="glass form-card" novalidate>
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input name="subject" type="text" list="subject-list" maxlength="60" required></label>
+            <label class="field"><span>Topic</span><input name="topic" type="text" maxlength="80" required></label>
+            <label class="field"><span>Obtained marks</span><input name="obtained" type="number" inputmode="decimal" min="0" step="0.01" required></label>
+            <label class="field"><span>Total marks</span><input name="total" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
+            <label class="field"><span>Date</span><input name="date" type="date" required></label>
+            <label class="field"><span>Percentage</span><input name="percent" type="text" readonly placeholder="Auto"></label>
+            <label class="field"><span>Duration (Minutes)</span><input name="duration" type="number" inputmode="numeric" min="1" max="1440" step="1"></label>
+          </div>
+          <p class="msg error" data-msg></p>
+          <button class="btn primary block" type="submit">Save exam</button>
+        </form>
+        <ul id="exam-list" class="record-list"></ul>
+      </div>
+
+      <!-- Revision -->
+      <div class="panel" data-panel="revision">
+        <form id="revision-form" class="glass form-card" novalidate>
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input name="subject" type="text" list="subject-list" maxlength="60" required></label>
+            <label class="field"><span>Topic</span><input name="topic" type="text" maxlength="80" required></label>
+            <label class="field"><span>Duration (Minutes)</span><input name="duration" type="number" inputmode="numeric" min="1" max="1440" step="1"></label>
+          </div>
+          <label class="field"><span>Task</span><input name="task" type="text" maxlength="120" required></label>
+          <p class="msg error" data-msg></p>
+          <button class="btn primary block" type="submit">Add revision task</button>
+        </form>
+        <ul id="revision-list" class="record-list"></ul>
+      </div>
+
+      <!-- Self study -->
+      <div class="panel" data-panel="self">
+        <form id="self-form" class="glass form-card" novalidate>
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input name="subject" type="text" list="subject-list" maxlength="60" required></label>
+            <label class="field"><span>Chapter</span><input name="chapter" type="text" maxlength="80" required></label>
+            <label class="field"><span>Duration (Minutes)</span><input name="minutes" type="number" inputmode="numeric" min="1" max="1440" step="1" required></label>
+            <input name="hours" type="hidden" value="0">
+          </div>
+          <label class="field"><span>Notes</span><textarea name="notes" rows="2" maxlength="500"></textarea></label>
+          <p class="msg error" data-msg></p>
+          <button class="btn primary block" type="submit">Save self study</button>
+        </form>
+        <ul id="self-list" class="record-list"></ul>
+      </div>
+
+      <!-- Practice -->
+      <div class="panel" data-panel="practice">
+        <form id="practice-form" class="glass form-card" novalidate>
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input name="subject" type="text" list="subject-list" maxlength="60" required></label>
+            <label class="field"><span>Question bank</span><input name="bank" type="text" maxlength="80" required></label>
+            <label class="field"><span>Total questions</span><input name="total" type="number" inputmode="numeric" min="1" step="1" required></label>
+            <label class="field"><span>Correct</span><input name="correct" type="number" inputmode="numeric" min="0" step="1" required></label>
+            <label class="field"><span>Wrong</span><input name="wrong" type="number" inputmode="numeric" min="0" step="1" required></label>
+            <label class="field"><span>Accuracy</span><input name="accuracy" type="text" readonly placeholder="Auto"></label>
+            <label class="field"><span>Duration (Minutes)</span><input name="duration" type="number" inputmode="numeric" min="1" max="1440" step="1"></label>
+          </div>
+          <label class="check"><input name="completed" type="checkbox"><span>Completed</span></label>
+          <p class="msg error" data-msg></p>
+          <button class="btn primary block" type="submit">Save practice</button>
+        </form>
+        <ul id="practice-list" class="record-list"></ul>
+      </div>
+
+      <datalist id="subject-list"></datalist>
+    </section>
+
+    <!-- ---------- HABITS ---------- -->
+    <section id="view-habits" class="view" data-view="habits" aria-label="Habits">
+      <header class="page-head"><h1>Habits</h1><span id="habit-score-chip" class="chip-static">0 / 50</span></header>
+
+      <div class="glass habit-card">
+        <div class="row-top"><h3>Salah</h3><strong id="salah-count">0 / 5</strong></div>
+        <div class="salah-grid" id="salah-grid">
+          <button class="salah-btn" type="button" data-prayer="fajr" aria-pressed="false">Fajr</button>
+          <button class="salah-btn" type="button" data-prayer="dhuhr" aria-pressed="false">Dhuhr</button>
+          <button class="salah-btn" type="button" data-prayer="asr" aria-pressed="false">Asr</button>
+          <button class="salah-btn" type="button" data-prayer="maghrib" aria-pressed="false">Maghrib</button>
+          <button class="salah-btn" type="button" data-prayer="isha" aria-pressed="false">Isha</button>
+        </div>
+      </div>
+
+      <div class="glass habit-card">
+        <div class="row-top"><h3>Quran</h3>
+          <button id="quran-toggle" class="toggle" type="button" role="switch" aria-checked="false" aria-label="Quran completed"></button>
+        </div>
+        <div class="form-grid">
+          <label class="field"><span>Minutes (optional)</span><input id="quran-minutes" type="number" inputmode="numeric" min="0" step="1"></label>
+          <label class="field"><span>Pages (optional)</span><input id="quran-pages" type="number" inputmode="numeric" min="0" step="1"></label>
+        </div>
+      </div>
+
+      <div class="glass habit-card">
+        <div class="row-top"><h3>Zero-lie goal</h3><span class="muted">Target: 0</span></div>
+        <div class="counter">
+          <button id="lies-minus" class="btn ghost round" type="button" aria-label="Decrease lies">−</button>
+          <strong id="lies-count">0</strong>
+          <button id="lies-plus" class="btn ghost round" type="button" aria-label="Increase lies">+</button>
+        </div>
+      </div>
+
+      <div class="glass habit-card">
+        <div class="row-top"><h3>Meditation</h3>
+          <button id="meditation-toggle" class="toggle" type="button" role="switch" aria-checked="false" aria-label="Meditation completed"></button>
+        </div>
+      </div>
+
+      <div class="glass habit-card">
+        <div class="row-top"><h3>Screen time</h3><span class="muted">Limit: 60 min</span></div>
+        <label class="field"><span>Actual minutes today</span><input id="screen-minutes" type="number" inputmode="numeric" min="0" max="1440" step="1"></label>
+        <p id="screen-note" class="msg"></p>
+      </div>
+
+      <div class="glass habit-card">
+        <div class="row-top"><h3>Sleep</h3><strong id="sleep-duration">Not logged</strong></div>
+        <div class="form-grid">
+          <label class="field"><span>Bedtime</span><input id="sleep-bed" type="time"></label>
+          <label class="field"><span>Wake-up</span><input id="sleep-wake" type="time"></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- PROGRESS ---------- -->
+    <section id="view-progress" class="view" data-view="progress" aria-label="Progress">
+      <header class="page-head"><h1>Progress</h1></header>
+
+      <nav class="tabs seg" id="range-tabs">
+        <button class="tab active" type="button" data-range="daily">Daily</button>
+        <button class="tab" type="button" data-range="weekly">Weekly</button>
+        <button class="tab" type="button" data-range="monthly">Monthly</button>
+      </nav>
+
+      <div class="grid-2" id="progress-stats">
+        <div class="glass stat"><span class="label">Total study</span><strong id="ps-total">0h</strong></div>
+        <div class="glass stat"><span class="label">Avg study / day</span><strong id="ps-avg">0h</strong></div>
+        <div class="glass stat"><span class="label">Avg score</span><strong id="ps-score">0%</strong></div>
+        <div class="glass stat"><span class="label">Study streak</span><strong id="ps-streak">0 days</strong></div>
+        <div class="glass stat"><span class="label">Best day</span><strong id="ps-best">None yet</strong></div>
+        <div class="glass stat"><span class="label">Weakest day</span><strong id="ps-weak">None yet</strong></div>
+        <div class="glass stat"><span class="label">Salah consistency</span><strong id="ps-salah">0%</strong></div>
+        <div class="glass stat"><span class="label">Quran consistency</span><strong id="ps-quran">0%</strong></div>
+        <div class="glass stat"><span class="label">Screen-time consistency</span><strong id="ps-screen">0%</strong></div>
+        <div class="glass stat"><span class="label">Sleep consistency</span><strong id="ps-sleep">0%</strong></div>
+      </div>
+
+      <div class="glass chart-card">
+        <h3>Study hours</h3>
+        <canvas id="chart-study" width="640" height="260" aria-label="Study hours chart"></canvas>
+      </div>
+      <div class="glass chart-card">
+        <h3>Daily score</h3>
+        <canvas id="chart-score" width="640" height="260" aria-label="Daily score chart"></canvas>
+      </div>
+
+      <div class="glass">
+        <div class="cal-head">
+          <button id="cal-prev" class="btn ghost round" type="button" aria-label="Previous month">‹</button>
+          <h3 id="cal-title">Month</h3>
+          <button id="cal-next" class="btn ghost round" type="button" aria-label="Next month">›</button>
+        </div>
+        <div class="cal-week" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div class="legend">
+          <span><i class="dot s"></i>90–100</span><span><i class="dot g"></i>70–89</span>
+          <span><i class="dot a"></i>50–69</span><span><i class="dot w"></i>Below 50</span>
+        </div>
+      </div>
+
+      <div class="glass">
+        <h3>Streaks</h3>
+        <div class="grid-2 tight">
+          <div class="stat-line"><span>Study</span><strong id="st-study">0</strong></div>
+          <div class="stat-line"><span>80%+ score</span><strong id="st-score">0</strong></div>
+          <div class="stat-line"><span>Salah</span><strong id="st-salah">0</strong></div>
+          <div class="stat-line"><span>Quran</span><strong id="st-quran">0</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- MORE ---------- -->
+    <section id="view-more" class="view" data-view="more" aria-label="More">
+      <header class="page-head"><h1>More</h1></header>
+
+      <nav class="tabs" id="more-tabs">
+        <button class="tab active" type="button" data-tab="revisionweek">Weekly revision</button>
+        <button class="tab" type="button" data-tab="plan">Tomorrow</button>
+        <button class="tab" type="button" data-tab="achievements">Badges</button>
+        <button class="tab" type="button" data-tab="report">Report</button>
+        <button class="tab" type="button" data-tab="settings">Settings</button>
+      </nav>
+
+      <!-- Weekly revision -->
+      <div class="panel active" data-panel="revisionweek">
+        <p class="hint">Subjects and chapters from the last 6 days, coloured by exam results.</p>
+        <ul id="weekly-revision-list" class="record-list"></ul>
+      </div>
+
+      <!-- Tomorrow plan -->
+      <div class="panel" data-panel="plan">
+        <form id="plan-form" class="glass form-card" novalidate>
+          <input name="id" type="hidden">
+          <div class="form-grid">
+            <label class="field"><span>Subject</span><input name="subject" type="text" list="subject-list" maxlength="60" required></label>
+            <label class="field"><span>Chapter</span><input name="chapter" type="text" maxlength="80"></label>
+            <label class="field"><span>Planned minutes</span><input name="minutes" type="number" inputmode="numeric" min="5" step="5" required></label>
+          </div>
+          <label class="field"><span>Task</span><input name="task" type="text" maxlength="120" required></label>
+          <p class="msg error" data-msg></p>
+          <div class="btn-row">
+            <button class="btn primary" type="submit" id="plan-submit">Add to plan</button>
+            <button class="btn ghost hidden" type="button" id="plan-cancel">Cancel edit</button>
+          </div>
+        </form>
+        <ul id="plan-list" class="record-list"></ul>
+      </div>
+
+      <!-- Achievements -->
+      <div class="panel" data-panel="achievements">
+        <div id="achievement-grid" class="badge-grid"></div>
+      </div>
+
+      <!-- Report card -->
+      <div class="panel" data-panel="report">
+        <article id="report-card" class="glass report-card">
+          <header><h2>Istiqama</h2><span id="rc-date" class="muted"></span></header>
+          <dl class="report-grid">
+            <div><dt>Study</dt><dd id="rc-study">0h / 0h</dd></div>
+            <div><dt>Study score</dt><dd id="rc-study-score">0 / 50</dd></div>
+            <div><dt>Habit score</dt><dd id="rc-habit-score">0 / 50</dd></div>
+            <div><dt>Final</dt><dd id="rc-final">0%</dd></div>
+            <div><dt>Salah</dt><dd id="rc-salah">0 / 5</dd></div>
+            <div><dt>Quran</dt><dd id="rc-quran">Not done</dd></div>
+            <div><dt>Meditation</dt><dd id="rc-meditation">Not done</dd></div>
+            <div><dt>Lies</dt><dd id="rc-lies">0</dd></div>
+            <div><dt>Screen time</dt><dd id="rc-screen">0m / 60m</dd></div>
+            <div><dt>Sleep</dt><dd id="rc-sleep">Not logged</dd></div>
+            <div><dt>Study streak</dt><dd id="rc-streak">0 days</dd></div>
+            <div><dt>Streak rank</dt><dd id="rc-rank">Unranked</dd></div>
+            <div><dt>Tomorrow's focus</dt><dd id="rc-focus">Not planned</dd></div>
+          </dl>
+        </article>
+        <button id="report-export" class="btn primary block" type="button">Export report</button>
+        <button id="report-png" class="btn ghost block" type="button">Download PNG report card</button>
+        <canvas id="report-canvas" class="hidden" width="1080" height="1350" aria-hidden="true"></canvas>
+      </div>
+
+      <!-- Settings -->
+      <div class="panel" data-panel="settings">
+        <form id="settings-form" class="glass form-card" novalidate>
+          <h3>Profile</h3>
+          <div class="form-grid">
+            <label class="field"><span>Name</span><input id="set-name" type="text" maxlength="40" autocomplete="name"></label>
+            <label class="field"><span>Email (display only)</span><input id="set-email" type="email" maxlength="80" autocomplete="email"></label>
+            <label class="field"><span>Default study target (hours)</span><input id="set-target" type="number" inputmode="decimal" min="0.5" max="24" step="0.5"></label>
+            <label class="field"><span>Sleep target (hours)</span><input id="set-sleep" type="number" inputmode="decimal" min="1" max="14" step="0.5"></label>
+          </div>
+          <label class="field"><span>Theme</span>
+            <select id="set-theme"><option value="midnight">Midnight</option><option value="oled">OLED black</option></select>
+          </label>
+          <label class="check"><input id="set-notify" type="checkbox"><span>Reminders (when supported by this device)</span></label>
+          <label class="field"><span>PIN lock (4–6 digits, leave empty to turn off)</span>
+            <input id="set-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+          </label>
+          <p class="msg" id="settings-msg"></p>
+          <button class="btn primary block" type="submit">Save settings</button>
+        </form>
+
+        <div class="glass form-card">
+          <h3>Your data</h3>
+          <button id="backup-export" class="btn ghost block" type="button">Export backup</button>
+          <label class="btn ghost block file-btn" for="backup-import">Import backup</label>
+          <input id="backup-import" type="file" accept="application/json,.json" class="visually-hidden">
+          <button id="data-clear" class="btn danger block" type="button">Clear local data</button>
+          <p class="msg" id="data-msg"></p>
+        </div>
+
+        <div class="glass form-card">
+          <h3>Account</h3>
+          <p id="account-status" class="hint"></p>
+          <button id="btn-logout" class="btn ghost block" type="button">Log out</button>
+        </div>
+
+        <div class="glass form-card about-card" id="about-card">
+          <h3>About / Developer Info</h3>
+          <div class="about-list">
+            <div class="stat-line"><span>App</span><strong>Istiqama</strong></div>
+            <div class="stat-line"><span>Version</span><strong>1.0</strong></div>
+            <div class="stat-line"><span>Developer</span><strong>Saifullah</strong></div>
+            <div class="stat-line"><span>Institution</span><strong>ALDC</strong></div>
+            <div class="stat-line"><span>Contact</span><strong><a href="mailto:mdsaifullahnahid001@gmail.com">mdsaifullahnahid001@gmail.com</a></strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav id="bottom-nav" aria-label="Main navigation">
+    <button class="nav-btn active" type="button" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+    <button class="nav-btn" type="button" data-nav="study"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM6 19h13M8 7h7"/></svg><span>Study</span></button>
+    <button class="nav-btn" type="button" data-nav="habits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.500-7 10-7 10z"/></svg><span>Habits</span></button>
+    <button class="nav-btn" type="button" data-nav="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span>Progress</span></button>
+    <button class="nav-btn" type="button" data-nav="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.600"/><circle cx="12" cy="12" r="1.600"/><circle cx="19" cy="12" r="1.600"/></svg><span>More</span></button>
+  </nav>
+</div>
+
+<!-- ================= SHARED UI ================= -->
+<div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="sheet-body glass">
+    <header class="row-top"><h3 id="sheet-title">Details</h3><button id="sheet-close" class="btn ghost round" type="button" aria-label="Close">×</button></header>
+    <div id="sheet-content"></div>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<noscript><p style="padding:24px;color:#fff">Istiqama needs JavaScript to run.</p></noscript>
+<script src="script.js"></script>
+
+<script>
+/* Istiqama: quotes, streak rank and PNG report card.
+   Self-contained; it only reads the DOM that script.js already fills in. */
+(function () {
+  "use strict";
+
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- 1. Motivation quotes (English + Bangla) ---------- */
+  var QUOTES = [
+    { en: "Indeed, with hardship comes ease.",
+      bn: "নিশ্চয়ই কষ্টের সাথেই স্বস্তি রয়েছে।",
+      src: "Quran 94:6 \u00B7 সূরা ইনশিরাহ ৯৪:৬" },
+    { en: "Indeed, those who say \u2018Our Lord is Allah\u2019 and then remain steadfast \u2014 the angels descend upon them: do not fear and do not grieve.",
+      bn: "যারা বলে, ‘আমাদের রব আল্লাহ’ এবং তারপর অবিচল থাকে, তাদের কাছে ফেরেশতারা অবতীর্ণ হয়ে বলে—ভয় পেয়ো না, দুঃখ করো না।",
+      src: "Quran 41:30 \u00B7 সূরা ফুসসিলাত ৪১:৩০" },
+    { en: "My Lord, increase me in knowledge.",
+      bn: "হে আমার রব, আমার জ্ঞান বৃদ্ধি করে দিন।",
+      src: "Quran 20:114 \u00B7 সূরা ত্ব-হা ২০:১১৪" },
+    { en: "Indeed, Allah does not change the condition of a people until they change what is in themselves.",
+      bn: "নিশ্চয়ই আল্লাহ কোনো জাতির অবস্থা পরিবর্তন করেন না, যতক্ষণ না তারা নিজেদের অবস্থা নিজেরা পরিবর্তন করে।",
+      src: "Quran 13:11 \u00B7 সূরা রা’দ ১৩:১১" },
+    { en: "And whoever relies upon Allah \u2014 then He is sufficient for him.",
+      bn: "যে আল্লাহর ওপর ভরসা করে, তার জন্য তিনিই যথেষ্ট।",
+      src: "Quran 65:3 \u00B7 সূরা ত্বালাক ৬৫:৩" },
+    { en: "Allah does not burden a soul beyond what it can bear.",
+      bn: "আল্লাহ কারও ওপর তার সাধ্যের অতিরিক্ত বোঝা চাপান না।",
+      src: "Quran 2:286 \u00B7 সূরা বাকারা ২:২৮৬" },
+    { en: "Indeed, Allah is with the patient.",
+      bn: "নিশ্চয়ই আল্লাহ ধৈর্যশীলদের সাথে আছেন।",
+      src: "Quran 2:153 \u00B7 সূরা বাকারা ২:১৫৩" },
+    { en: "Man will have nothing except what he strives for.",
+      bn: "মানুষ তা-ই পায়, যার জন্য সে চেষ্টা করে।",
+      src: "Quran 53:39 \u00B7 সূরা নাজম ৫৩:৩৯" },
+    { en: "Are those who know equal to those who do not know?",
+      bn: "যারা জানে আর যারা জানে না, তারা কি সমান?",
+      src: "Quran 39:9 \u00B7 সূরা যুমার ৩৯:৯" },
+    { en: "The most beloved deeds to Allah are the most consistent ones, even if they are small.",
+      bn: "আল্লাহর কাছে সবচেয়ে প্রিয় আমল হলো সেটি, যা নিয়মিত করা হয়—তা পরিমাণে কম হলেও।",
+      src: "Sahih al-Bukhari & Muslim \u00B7 সহিহ বুখারি ও মুসলিম" },
+    { en: "Whoever takes a path in search of knowledge, Allah makes easy for him a path to Paradise.",
+      bn: "যে ব্যক্তি জ্ঞান অর্জনের পথে চলে, আল্লাহ তার জন্য জান্নাতের পথ সহজ করে দেন।",
+      src: "Sahih Muslim \u00B7 সহিহ মুসলিম" },
+    { en: "There are two blessings many people lose out on: good health and free time.",
+      bn: "দুটি নিয়ামতের ব্যাপারে অনেক মানুষ ক্ষতিগ্রস্ত: সুস্থতা ও অবসর।",
+      src: "Sahih al-Bukhari \u00B7 সহিহ বুখারি" }
+  ];
+  var lastQuote = -1;
+
+  function showQuote() {
+    var en = $("quote-en"), bn = $("quote-bn"), src = $("quote-src");
+    if (!en || !bn || !src) return;
+    var i;
+    do { i = Math.floor(Math.random() * QUOTES.length); }
+    while (QUOTES.length > 1 && i === lastQuote);
+    lastQuote = i;
+    en.textContent = "\u201C" + QUOTES[i].en + "\u201D";
+    bn.textContent = QUOTES[i].bn;
+    src.textContent = QUOTES[i].src;
+  }
+
+  /* ---------- 2. Streak ranks (consecutive days) ---------- */
+  var RANKS = [
+    { key: "beginner",   name: "Beginner",   min: 1 },
+    { key: "regular",    name: "Regular",    min: 4 },
+    { key: "consistent", name: "Consistent", min: 8 },
+    { key: "pro",        name: "Pro",        min: 15 },
+    { key: "master",     name: "Master",     min: 30 }
+  ];
+
+  function rankFor(days) {
+    var found = null;
+    for (var i = 0; i < RANKS.length; i++) {
+      if (days >= RANKS[i].min) found = RANKS[i];
+    }
+    return found;
+  }
+
+  function readStreak() {
+    var el = $("home-streak");
+    var n = parseInt(((el && el.textContent) || "").replace(/[^\d]/g, ""), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function dayWord(n) { return n + (n === 1 ? " day" : " days"); }
+
+  function updateRank() {
+    var days = readStreak();
+    var rank = rankFor(days);
+    var badge = $("rank-badge"), daysEl = $("rank-days"), nextEl = $("rank-next");
+    var ladder = $("rank-ladder"), rc = $("rc-rank");
+
+    if (badge) badge.textContent = rank ? rank.name : "Unranked";
+    if (daysEl) daysEl.textContent = dayWord(days) + " streak";
+
+    if (ladder) {
+      var items = ladder.querySelectorAll("li[data-rank]");
+      for (var i = 0; i < items.length; i++) {
+        if (rank && items[i].getAttribute("data-rank") === rank.key) {
+          items[i].setAttribute("aria-current", "true");
+        } else {
+          items[i].removeAttribute("aria-current");
+        }
+      }
+    }
+
+    if (nextEl) {
+      var next = null;
+      for (var j = 0; j < RANKS.length; j++) {
+        if (RANKS[j].min > days) { next = RANKS[j]; break; }
+      }
+      if (days < 1) nextEl.textContent = "Study today to start your streak and become a Beginner.";
+      else if (next) nextEl.textContent = dayWord(next.min - days) + " more to reach " + next.name + ".";
+      else nextEl.textContent = "Top rank reached. Keep going!";
+    }
+
+    if (rc) rc.textContent = rank ? rank.name + " (" + dayWord(days) + ")" : "Unranked";
+  }
+
+  /* ---------- 3. Downloadable PNG report card ---------- */
+  function solid(value, fallback) {
+    return (!value || value === "transparent" || value === "rgba(0, 0, 0, 0)") ? fallback : value;
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function fit(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    while (text.length > 1 && ctx.measureText(text + "\u2026").width > maxWidth) text = text.slice(0, -1);
+    return text + "\u2026";
+  }
+
+  function drawReport() {
+    var canvas = $("report-canvas");
+    if (!canvas || !canvas.getContext) return null;
+    updateRank();
+
+    var W = 1080, H = 1350;
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext("2d");
+
+    var bodyCS = getComputedStyle(document.body);
+    var bg = solid(bodyCS.backgroundColor, solid(getComputedStyle(document.documentElement).backgroundColor, "#0b0d1a"));
+    var fg = solid(bodyCS.color, "#ffffff");
+    var dateEl = $("rc-date");
+    var muted = solid(dateEl ? getComputedStyle(dateEl).color : "", "rgba(255,255,255,0.6)");
+    var btn = $("report-export");
+    var accent = solid(btn ? getComputedStyle(btn).backgroundColor : "", fg);
+    var font = bodyCS.fontFamily || "sans-serif";
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    roundRect(ctx, 40, 40, W - 80, H - 80, 36);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+
+    ctx.fillStyle = fg;
+    ctx.font = "700 72px " + font;
+    ctx.fillText("Istiqama", W / 2, 150);
+
+    var dateText = (dateEl && dateEl.textContent.trim()) ||
+      new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    ctx.fillStyle = muted;
+    ctx.font = "400 32px " + font;
+    ctx.fillText(dateText, W / 2, 205);
+
+    /* Streak rank badge */
+    var days = readStreak();
+    var rank = rankFor(days);
+    roundRect(ctx, 190, 250, W - 380, 210, 28);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = accent;
+    ctx.stroke();
+    ctx.fillStyle = muted;
+    ctx.font = "400 28px " + font;
+    ctx.fillText("STREAK RANK", W / 2, 305);
+    ctx.fillStyle = fg;
+    ctx.font = "700 84px " + font;
+    ctx.fillText(rank ? rank.name : "Unranked", W / 2, 393);
+    ctx.fillStyle = muted;
+    ctx.font = "400 30px " + font;
+    ctx.fillText(dayWord(days) + " streak", W / 2, 438);
+
+    /* Daily stats, read from the on-screen report card */
+    var cells = document.querySelectorAll("#report-card .report-grid > div");
+    var colW = 450, startX = 90, startY = 560, rowH = 125;
+    ctx.textAlign = "left";
+    for (var i = 0; i < cells.length && i < 12; i++) {
+      var dt = cells[i].querySelector("dt"), dd = cells[i].querySelector("dd");
+      var x = startX + (i % 2) * (colW + 60);
+      var y = startY + Math.floor(i / 2) * rowH;
+      ctx.fillStyle = muted;
+      ctx.font = "400 28px " + font;
+      ctx.fillText(dt ? dt.textContent.trim() : "", x, y);
+      ctx.fillStyle = fg;
+      ctx.font = "700 42px " + font;
+      ctx.fillText(fit(ctx, dd ? dd.textContent.trim() : "", colW), x, y + 52);
+    }
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = muted;
+    ctx.font = "400 26px " + font;
+    ctx.fillText("Istiqama \u00B7 Study with Focus. Live with Faith.", W / 2, H - 80);
+    return canvas;
+  }
+
+  function downloadReport() {
+    var canvas = drawReport();
+    if (!canvas) return;
+    var stamp = new Date().toISOString().slice(0, 10);
+    var name = "istiqama-report-" + stamp + ".png";
+
+    function save(url, revoke) {
+      var a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      if (revoke) setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    }
+
+    if (canvas.toBlob) {
+      canvas.toBlob(function (blob) {
+        if (blob) save(URL.createObjectURL(blob), true);
+        else save(canvas.toDataURL("image/png"), false);
+      }, "image/png");
+    } else {
+      save(canvas.toDataURL("image/png"), false);
+    }
+  }
+
+  /* ---------- wire up ---------- */
+  var nextBtn = $("quote-next");
+  if (nextBtn) nextBtn.addEventListener("click", showQuote);
+  var pngBtn = $("report-png");
+  if (pngBtn) pngBtn.addEventListener("click", downloadReport);
+
+  showQuote();
+  updateRank();
+
+  var streakEl = $("home-streak");
+  if (streakEl && window.MutationObserver) {
+    new MutationObserver(updateRank).observe(streakEl, { childList: true, characterData: true, subtree: true });
+  }
+
+  window.Istiqama = { rankFor: rankFor, ranks: RANKS, refreshRank: updateRank, drawReport: drawReport };
+})();
+</script>
+</body>
+</html>
